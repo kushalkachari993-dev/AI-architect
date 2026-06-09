@@ -18,7 +18,7 @@ class LlmResult:
 
 
 SYSTEM_PROMPT = """You are a senior software architect.
-Return only valid JSON matching this exact shape:
+Return compact valid JSON matching this exact required shape:
 {
   "project_name": "string",
   "summary": "string",
@@ -46,48 +46,14 @@ Return only valid JSON matching this exact shape:
   "cost_estimate": [
     {"component": "string", "assumption": "string", "monthly_usd": 100}
   ],
-  "deployment_plan": ["step"],
-  "architecture_options": [
-    {
-      "name": "MVP Architecture",
-      "description": "string",
-      "pros": ["string"],
-      "cons": ["string"],
-      "recommended_for": "string"
-    }
-  ],
-  "review_findings": [
-    {
-      "severity": "low|medium|high",
-      "area": "Complexity|Cost|Schema|API|Security",
-      "finding": "string",
-      "recommendation": "string"
-    }
-  ],
-  "scorecard": [
-    {"category": "Complexity", "score": 1, "rationale": "string"}
-  ],
-  "non_functional_requirements": [
-    {"category": "Security", "recommendation": "string"}
-  ],
-  "architecture_decision_records": [
-    {
-      "id": "ADR-001",
-      "decision": "string",
-      "rationale": "string",
-      "alternatives": ["string"],
-      "consequences": ["string"]
-    }
-  ]
+  "deployment_plan": ["step"]
 }
 
 Design practical cloud-native systems. Keep names implementation-safe.
-Act as both architect and reviewer. Challenge your own design:
-- Include MVP, scalable, and enterprise architecture options.
-- Flag over-engineering and cost risks.
-- Prefer modular monolith for small teams, low traffic, or budgets below $100/month.
-- Include schema normalization/index concerns and business-semantic API recommendations.
-- Include trade-offs, non-functional requirements, and ADRs.
+Keep output concise. The backend will generate reviews, ADRs, scorecards, validation, and files.
+Limit database_schema to 4-8 important entities.
+Limit api_design to 5-10 business-semantic endpoints.
+Prefer MVP/modular monolith for small teams, low traffic, or budgets below $100/month.
 For architecture_diagram_mermaid:
 - Use Mermaid flowchart syntax.
 - Put every node, edge, classDef, and class statement on its own line.
@@ -108,22 +74,24 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
     model = os.getenv("AI_ARCHITECT_MODEL", "gpt-5-nano")
     base_url = os.getenv("AI_ARCHITECT_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     timeout = float(os.getenv("AI_ARCHITECT_LLM_TIMEOUT_SECONDS", "45"))
+    max_output_tokens = int(os.getenv("AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS", "3500"))
     if model.startswith("gpt-5"):
         timeout = max(timeout, 90)
 
     payload = {
         "model": model,
         "response_format": {"type": "json_object"},
+        "max_completion_tokens": max_output_tokens,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
                     "Requirements document:\n"
-                    f"{requirements}\n\n"
+                    f"{_trim_input(requirements)}\n\n"
                     "User stories:\n"
-                    f"{user_stories}\n\n"
-                    "Generate the architecture plan JSON now."
+                    f"{_trim_input(user_stories)}\n\n"
+                    "Generate the compact architecture plan JSON now."
                 ),
             },
         ],
@@ -155,7 +123,7 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
         except URLError as exc:
             last_error = f"Network error contacting LLM: {exc.reason}"
         except TimeoutError:
-            last_error = f"LLM request timed out after {timeout:g} seconds"
+            return LlmResult(None, f"LLM request timed out after {timeout:g} seconds")
         except ValidationError as exc:
             last_error = f"LLM returned JSON that did not match the architecture schema: {_shorten(str(exc))}"
         except json.JSONDecodeError as exc:
@@ -268,3 +236,8 @@ def _http_error_message(exc: HTTPError, attempt: int) -> str:
 def _shorten(value: str, limit: int = 220) -> str:
     clean = " ".join(value.split())
     return clean if len(clean) <= limit else clean[:limit] + "..."
+
+
+def _trim_input(value: str, limit: int = 12000) -> str:
+    clean = value.strip()
+    return clean if len(clean) <= limit else clean[:limit] + "\n\n[Input truncated for LLM latency.]"
