@@ -147,7 +147,9 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
             with urlopen(request, timeout=timeout) as response:
                 response_json = json.loads(response.read().decode("utf-8"))
             content = _extract_message_content(response_json)
-            return LlmResult(ArchitecturePlan.model_validate_json(content))
+            raw_plan = json.loads(content)
+            normalized_plan = _normalize_plan_payload(raw_plan)
+            return LlmResult(ArchitecturePlan.model_validate(normalized_plan))
         except HTTPError as exc:
             last_error = _http_error_message(exc, attempt)
         except URLError as exc:
@@ -169,6 +171,80 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
 
 def _extract_message_content(response_json: dict[str, Any]) -> str:
     return response_json["choices"][0]["message"]["content"]
+
+
+def _normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(payload)
+    payload["api_design"] = [_normalize_endpoint(endpoint) for endpoint in payload.get("api_design", [])]
+    payload["database_schema"] = [_normalize_entity(entity) for entity in payload.get("database_schema", [])]
+    return payload
+
+
+def _normalize_endpoint(endpoint: dict[str, Any]) -> dict[str, Any]:
+    endpoint = dict(endpoint)
+    endpoint["request"] = _flatten_schema(endpoint.get("request", {}))
+    endpoint["response"] = _flatten_schema(endpoint.get("response", {}))
+    return endpoint
+
+
+def _normalize_entity(entity: dict[str, Any]) -> dict[str, Any]:
+    entity = dict(entity)
+    entity["fields"] = [_field_to_string(field) for field in entity.get("fields", [])]
+    entity["relationships"] = [str(item) for item in entity.get("relationships", [])]
+    return entity
+
+
+def _flatten_schema(value: Any, prefix: str = "") -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {"value": _type_name(value)}
+
+    flattened: dict[str, str] = {}
+    for key, item in value.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(item, dict):
+            if _looks_like_type_object(item):
+                flattened[path] = _type_name(item)
+            else:
+                flattened.update(_flatten_schema(item, path))
+        else:
+            flattened[path] = _type_name(item)
+    return flattened
+
+
+def _looks_like_type_object(value: dict[str, Any]) -> bool:
+    return any(key in value for key in {"type", "format", "description", "example"})
+
+
+def _field_to_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        name = value.get("name") or value.get("field") or value.get("column") or "field"
+        return f"{name}: {_type_name(value)}"
+    return str(value)
+
+
+def _type_name(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        if "type" in value:
+            raw_type = str(value["type"])
+            if "format" in value:
+                return f"{raw_type}:{value['format']}"
+            return raw_type
+        if "example" in value:
+            return type(value["example"]).__name__
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    return type(value).__name__
 
 
 def _http_error_message(exc: HTTPError, attempt: int) -> str:

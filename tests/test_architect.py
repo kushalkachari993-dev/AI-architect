@@ -1,5 +1,6 @@
 from app.services.architect import generate_architecture_package, generate_package_from_plan
 from app.services.diagram import normalize_mermaid, service_diagram
+from app.services.llm import _normalize_plan_payload
 from app.services.render import package_to_zip
 
 
@@ -111,3 +112,24 @@ def test_approved_plan_regenerates_full_stack_files() -> None:
     assert "generated_react/src/main.jsx" in approved.generated_files.react_frontend
     assert "generated_database/schema.sql" in approved.generated_files.database_files
     assert "generated_docker/docker-compose.yml" in approved.generated_files.docker_files
+
+
+def test_normalizes_nested_llm_api_request_schema() -> None:
+    payload = {
+        "api_design": [
+            {
+                "method": "GET",
+                "path": "/vendors/{vendorId}",
+                "purpose": "Get vendor",
+                "request": {"pathParam": {"vendorId": "uuid"}},
+                "response": {"vendor": {"id": "uuid", "name": "string"}},
+            }
+        ],
+        "database_schema": [{"name": "Vendor", "fields": [{"name": "id", "type": "uuid"}]}],
+    }
+
+    normalized = _normalize_plan_payload(payload)
+
+    assert normalized["api_design"][0]["request"]["pathParam.vendorId"] == "uuid"
+    assert normalized["api_design"][0]["response"]["vendor.id"] == "uuid"
+    assert normalized["database_schema"][0]["fields"] == ["id: uuid"]
