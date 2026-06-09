@@ -99,23 +99,23 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
     if not model.startswith("gpt-5"):
         payload["temperature"] = 0.2
 
-    request = Request(
-        f"{base_url}/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
     last_error = "LLM request failed"
     for attempt in range(2):
         try:
+            attempt_payload = _payload_for_attempt(payload, attempt, max_output_tokens)
+            request = Request(
+                f"{base_url}/chat/completions",
+                data=json.dumps(attempt_payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             with urlopen(request, timeout=timeout) as response:
                 response_json = json.loads(response.read().decode("utf-8"))
             content = _extract_message_content(response_json)
-            raw_plan = json.loads(content)
+            raw_plan = _parse_json_content(content, response_json)
             normalized_plan = _normalize_plan_payload(raw_plan)
             return LlmResult(ArchitecturePlan.model_validate(normalized_plan))
         except HTTPError as exc:
@@ -128,6 +128,8 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
             last_error = f"LLM returned JSON that did not match the architecture schema: {_shorten(str(exc))}"
         except json.JSONDecodeError as exc:
             last_error = f"LLM returned invalid JSON: {_shorten(str(exc))}"
+        except ValueError as exc:
+            last_error = str(exc)
         except (KeyError, IndexError, TypeError) as exc:
             last_error = f"LLM response shape was unexpected: {type(exc).__name__}"
         except Exception as exc:
@@ -138,7 +140,63 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
 
 
 def _extract_message_content(response_json: dict[str, Any]) -> str:
-    return response_json["choices"][0]["message"]["content"]
+    content = response_json["choices"][0]["message"].get("content")
+    return content or ""
+
+
+def _payload_for_attempt(payload: dict[str, Any], attempt: int, max_output_tokens: int) -> dict[str, Any]:
+    if attempt == 0:
+        return payload
+
+    retry_payload = dict(payload)
+    retry_payload["messages"] = list(payload["messages"]) + [
+        {
+            "role": "user",
+            "content": (
+                "Your previous response was empty or not parseable as JSON. "
+                "Return only the compact JSON object, with no markdown and no commentary."
+            ),
+        }
+    ]
+    retry_payload["max_completion_tokens"] = min(max(max_output_tokens + 2000, 6000), 8000)
+    return retry_payload
+
+
+def _parse_json_content(content: str, response_json: dict[str, Any]) -> dict[str, Any]:
+    cleaned = _clean_json_text(content)
+    if not cleaned:
+        finish_reason = response_json.get("choices", [{}])[0].get("finish_reason", "unknown")
+        token_hint = response_json.get("usage", {})
+        raise ValueError(
+            "LLM returned an empty message"
+            f" (finish_reason={finish_reason}, usage={token_hint}). "
+            "Increase AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS or use a smaller input."
+        )
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        extracted = _extract_json_object(cleaned)
+        if extracted:
+            return json.loads(extracted)
+        raise
+
+
+def _clean_json_text(content: str) -> str:
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.removeprefix("```json").removeprefix("```").strip()
+        if text.endswith("```"):
+            text = text[:-3].strip()
+    return text
+
+
+def _extract_json_object(text: str) -> str | None:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
 
 
 def _normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
