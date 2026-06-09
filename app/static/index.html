@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Software Architect Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AI</div>
+          <div>
+            <h1>Software Architect Agent</h1>
+            <p id="modeLabel">Ready</p>
+          </div>
+        </div>
+
+        <form id="generateForm" class="upload-form">
+          <label class="select-field" for="domainSelect">
+            <span>Domain</span>
+            <select id="domainSelect" name="domain">
+              <option value="general">General software</option>
+              <option value="saas">SaaS</option>
+              <option value="ecommerce">Ecommerce</option>
+              <option value="fintech">Fintech</option>
+              <option value="healthcare">Healthcare</option>
+              <option value="logistics">Logistics</option>
+              <option value="internal tool">Internal tool</option>
+            </select>
+          </label>
+
+          <label class="file-zone" for="requirementsFile">
+            <span>Requirements</span>
+            <strong id="requirementsName">Choose file</strong>
+            <input id="requirementsFile" name="requirements_file" type="file" accept=".txt,.md,.markdown" />
+          </label>
+
+          <textarea id="requirementsText" class="text-input" rows="6" placeholder="Or paste requirements here"></textarea>
+
+          <label class="file-zone" for="storiesFile">
+            <span>User stories</span>
+            <strong id="storiesName">Choose file</strong>
+            <input id="storiesFile" name="user_stories_file" type="file" accept=".txt,.md,.markdown" />
+          </label>
+
+          <textarea id="storiesText" class="text-input" rows="5" placeholder="Or paste user stories here"></textarea>
+
+          <button id="generateButton" class="primary-button" type="submit">
+            <span class="button-icon">&gt;</span>
+            Generate
+          </button>
+        </form>
+
+        <button id="downloadButton" class="secondary-button" type="button" disabled>
+          <span class="button-icon">v</span>
+          Download ZIP
+        </button>
+
+        <div class="status-panel">
+          <div>
+            <span>Model path</span>
+            <strong id="generationMode">Not run</strong>
+          </div>
+          <div>
+            <span>Estimated monthly cost</span>
+            <strong id="costTotal">$0</strong>
+          </div>
+        </div>
+
+        <section class="history-panel">
+          <div class="history-title">
+            <span>Recent projects</span>
+            <button id="refreshHistory" type="button" title="Refresh history">R</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="topbar">
+          <div>
+            <h2 id="projectName">Upload documents to generate an architecture</h2>
+            <p id="projectSummary">Architecture, services, schema, APIs, deployment, and generated artifacts will appear here.</p>
+          </div>
+          <div id="runState" class="run-state idle">Idle</div>
+        </section>
+
+        <nav class="tabs" aria-label="Result views">
+          <button class="tab active" type="button" data-tab="diagram">Diagram</button>
+          <button class="tab" type="button" data-tab="schema">Schema</button>
+          <button class="tab" type="button" data-tab="api">API</button>
+          <button class="tab" type="button" data-tab="services">Services</button>
+          <button class="tab" type="button" data-tab="options">Options</button>
+          <button class="tab" type="button" data-tab="review">Review</button>
+          <button class="tab" type="button" data-tab="validation">Validation</button>
+          <button class="tab" type="button" data-tab="cost">Cost</button>
+          <button class="tab" type="button" data-tab="nfr">NFRs</button>
+          <button class="tab" type="button" data-tab="adr">ADRs</button>
+          <button class="tab" type="button" data-tab="edit">Edit</button>
+          <button class="tab" type="button" data-tab="deploy">Deploy</button>
+          <button class="tab" type="button" data-tab="files">Files</button>
+        </nav>
+
+        <section id="emptyState" class="empty-state">
+          <div class="empty-grid">
+            <div>
+              <span>01</span>
+              <strong>Upload</strong>
+              <p>Requirements and user stories.</p>
+            </div>
+            <div>
+              <span>02</span>
+              <strong>Generate</strong>
+              <p>LLM plan with deterministic file output.</p>
+            </div>
+            <div>
+              <span>03</span>
+              <strong>Export</strong>
+              <p>Download FastAPI, Docker, and Terraform.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="results" class="results hidden">
+          <div class="tab-panel active" id="panel-diagram">
+            <div id="diagramView" class="diagram-view"></div>
+            <pre id="diagramSource" class="code-block"></pre>
+          </div>
+
+          <div class="tab-panel" id="panel-schema">
+            <div id="schemaGrid" class="data-grid"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-api">
+            <div id="apiTable" class="table-wrap"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-services">
+            <div id="serviceGrid" class="data-grid"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-options">
+            <div id="optionsGrid" class="data-grid"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-review">
+            <div id="reviewGrid" class="data-grid"></div>
+            <div id="scorecardTable" class="table-wrap scorecard-wrap"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-validation">
+            <div id="validationTable" class="table-wrap"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-cost">
+            <div id="costTable" class="table-wrap"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-nfr">
+            <div id="nfrGrid" class="data-grid"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-adr">
+            <div id="adrGrid" class="data-grid"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-edit">
+            <div class="edit-panel">
+              <div class="edit-heading">
+                <h3>Review and Approve Architecture JSON</h3>
+                <button id="approveButton" class="primary-button" type="button">Approve & Generate Files</button>
+              </div>
+              <textarea id="architectureEditor" class="json-editor" spellcheck="false"></textarea>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="panel-deploy">
+            <ol id="deployList" class="deploy-list"></ol>
+          </div>
+
+          <div class="tab-panel" id="panel-files">
+            <div id="filesGrid" class="files-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

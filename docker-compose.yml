@@ -1,0 +1,7 @@
+services:
+  ai-architect-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=local
