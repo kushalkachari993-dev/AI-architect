@@ -35,6 +35,7 @@ def test_generates_domain_specific_architecture() -> None:
     assert {"User", "Order", "Payment", "AuditEvent"}.issubset(entity_names)
     assert "flowchart LR" in package.architecture_diagram_mermaid
     assert package.generation_mode == "deterministic-fallback"
+    assert package.llm_error
     assert package.generated_files.fastapi_code["generated_fastapi/app/main.py"]
     assert package.generated_files.fastapi_code["generated_fastapi/openapi.yaml"]
     assert package.architecture_options
@@ -61,6 +62,7 @@ def test_uses_llm_plan_when_configured(monkeypatch) -> None:
     package = generate_architecture_package("Anything", "As a user, I want useful software.")
 
     assert package.generation_mode == "hybrid-llm"
+    assert package.llm_error is None
     assert package.project_name == "LLM Planned Platform"
     assert "generated_fastapi/app/main.py" in package.generated_files.fastapi_code
     assert package.review_findings
@@ -105,6 +107,7 @@ def test_approved_plan_regenerates_full_stack_files() -> None:
     approved = generate_package_from_plan(package)
 
     assert approved.generation_mode == "approved-edit"
+    assert approved.llm_error is None
     assert "generated_react/src/main.jsx" in approved.generated_files.react_frontend
     assert "generated_database/schema.sql" in approved.generated_files.database_files
     assert "generated_docker/docker-compose.yml" in approved.generated_files.docker_files

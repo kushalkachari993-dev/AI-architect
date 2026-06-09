@@ -18,6 +18,7 @@ const emptyState = document.querySelector("#emptyState");
 const projectName = document.querySelector("#projectName");
 const projectSummary = document.querySelector("#projectSummary");
 const generationMode = document.querySelector("#generationMode");
+const llmError = document.querySelector("#llmError");
 const modeLabel = document.querySelector("#modeLabel");
 const costTotal = document.querySelector("#costTotal");
 
@@ -133,6 +134,7 @@ function renderPackage(pkg) {
   projectName.textContent = pkg.project_name;
   projectSummary.textContent = pkg.summary;
   generationMode.textContent = pkg.generation_mode;
+  renderLlmError(pkg.llm_error);
   costTotal.textContent = formatUsd(sum(pkg.cost_estimate.map((item) => item.monthly_usd)));
 
   renderDiagram(pkg.architecture_diagram_mermaid);
@@ -148,6 +150,16 @@ function renderPackage(pkg) {
   renderDeploy(pkg.deployment_plan);
   renderFiles(pkg.generated_files);
   renderEditor(pkg);
+}
+
+function renderLlmError(error) {
+  if (!error) {
+    llmError.classList.add("hidden");
+    llmError.textContent = "";
+    return;
+  }
+  llmError.classList.remove("hidden");
+  llmError.textContent = `Fallback reason: ${error}`;
 }
 
 async function loadStatus() {
@@ -485,6 +497,7 @@ function renderEditor(pkg) {
   const editable = { ...pkg };
   delete editable.generated_files;
   delete editable.generation_mode;
+  delete editable.llm_error;
   delete editable.project_id;
   delete editable.created_at;
   architectureEditor.value = JSON.stringify(editable, null, 2);

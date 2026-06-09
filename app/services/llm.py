@@ -11,6 +11,12 @@ from pydantic import ValidationError
 from app.models import ArchitecturePlan
 
 
+class LlmResult:
+    def __init__(self, plan: ArchitecturePlan | None, error: str | None = None):
+        self.plan = plan
+        self.error = error
+
+
 SYSTEM_PROMPT = """You are a senior software architect.
 Return only valid JSON matching this exact shape:
 {
@@ -90,14 +96,14 @@ For architecture_diagram_mermaid:
 """
 
 
-def generate_llm_plan(requirements: str, user_stories: str) -> ArchitecturePlan | None:
+def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("AI_ARCHITECT_LLM_API_KEY")
     if not api_key:
-        return None
+        return LlmResult(None, "OPENAI_API_KEY or AI_ARCHITECT_LLM_API_KEY is not configured")
 
     provider = os.getenv("AI_ARCHITECT_LLM_PROVIDER", "openai-compatible").lower()
     if provider not in {"openai", "openai-compatible"}:
-        return None
+        return LlmResult(None, f"Unsupported LLM provider: {provider}")
 
     model = os.getenv("AI_ARCHITECT_MODEL", "gpt-5-nano")
     base_url = os.getenv("AI_ARCHITECT_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
@@ -135,25 +141,54 @@ def generate_llm_plan(requirements: str, user_stories: str) -> ArchitecturePlan 
         method="POST",
     )
 
-    for _attempt in range(2):
+    last_error = "LLM request failed"
+    for attempt in range(2):
         try:
             with urlopen(request, timeout=timeout) as response:
                 response_json = json.loads(response.read().decode("utf-8"))
             content = _extract_message_content(response_json)
-            return ArchitecturePlan.model_validate_json(content)
-        except (
-            HTTPError,
-            URLError,
-            TimeoutError,
-            KeyError,
-            IndexError,
-            TypeError,
-            ValidationError,
-            json.JSONDecodeError,
-        ):
+            return LlmResult(ArchitecturePlan.model_validate_json(content))
+        except HTTPError as exc:
+            last_error = _http_error_message(exc, attempt)
+        except URLError as exc:
+            last_error = f"Network error contacting LLM: {exc.reason}"
+        except TimeoutError:
+            last_error = f"LLM request timed out after {timeout:g} seconds"
+        except ValidationError as exc:
+            last_error = f"LLM returned JSON that did not match the architecture schema: {_shorten(str(exc))}"
+        except json.JSONDecodeError as exc:
+            last_error = f"LLM returned invalid JSON: {_shorten(str(exc))}"
+        except (KeyError, IndexError, TypeError) as exc:
+            last_error = f"LLM response shape was unexpected: {type(exc).__name__}"
+        except Exception as exc:
+            last_error = f"Unexpected LLM error: {type(exc).__name__}"
+        if attempt == 0:
             continue
-    return None
+    return LlmResult(None, last_error)
 
 
 def _extract_message_content(response_json: dict[str, Any]) -> str:
     return response_json["choices"][0]["message"]["content"]
+
+
+def _http_error_message(exc: HTTPError, attempt: int) -> str:
+    body = ""
+    try:
+        body = exc.read().decode("utf-8")
+        parsed = json.loads(body)
+        message = parsed.get("error", {}).get("message") or body
+    except Exception:
+        message = body or str(exc)
+
+    if exc.code == 401:
+        return "OpenAI authentication failed. Check OPENAI_API_KEY."
+    if exc.code == 429:
+        return f"OpenAI rate limit or quota error: {_shorten(message)}"
+    if exc.code >= 500:
+        return f"OpenAI server error on attempt {attempt + 1}: {_shorten(message)}"
+    return f"OpenAI API error {exc.code}: {_shorten(message)}"
+
+
+def _shorten(value: str, limit: int = 220) -> str:
+    clean = " ".join(value.split())
+    return clean if len(clean) <= limit else clean[:limit] + "..."

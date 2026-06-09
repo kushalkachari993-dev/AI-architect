@@ -96,4 +96,5 @@ class ArchitecturePlan(BaseModel):
 
 class ArchitecturePackage(ArchitecturePlan):
     generation_mode: str
+    llm_error: str | None = None
     generated_files: GeneratedFiles

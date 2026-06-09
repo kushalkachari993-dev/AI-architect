@@ -76,6 +76,8 @@ Responses include `generation_mode`:
 - `hybrid-llm`: LLM planned the architecture, deterministic templates generated files.
 - `deterministic-fallback`: local rules generated the package.
 
+If the app falls back, responses include `llm_error` with a safe diagnostic such as missing API key, OpenAI auth failure, timeout, invalid JSON, or schema validation failure.
+
 ## Generate An Architecture Package
 
 ```powershell

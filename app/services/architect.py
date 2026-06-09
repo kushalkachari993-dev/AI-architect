@@ -34,13 +34,14 @@ DOMAIN_HINTS = {
 
 
 def generate_architecture_package(requirements: str, user_stories: str) -> ArchitecturePackage:
-    llm_plan = generate_llm_plan(requirements, user_stories)
-    if llm_plan:
-        return _package_from_plan(llm_plan, generation_mode="hybrid-llm")
+    llm_result = generate_llm_plan(requirements, user_stories)
+    if llm_result.plan:
+        return _package_from_plan(llm_result.plan, generation_mode="hybrid-llm")
 
     return _package_from_plan(
         _deterministic_plan(requirements, user_stories),
         generation_mode="deterministic-fallback",
+        llm_error=llm_result.error,
     )
 
 
@@ -73,9 +74,10 @@ def _deterministic_plan(requirements: str, user_stories: str) -> ArchitecturePla
     )
 
 
-def _package_from_plan(plan: ArchitecturePlan, generation_mode: str) -> ArchitecturePackage:
+def _package_from_plan(plan: ArchitecturePlan, generation_mode: str, llm_error: str | None = None) -> ArchitecturePackage:
     plan_data = plan.model_dump()
     plan_data.pop("generation_mode", None)
+    plan_data.pop("llm_error", None)
     plan_data.pop("generated_files", None)
     services = [Microservice.model_validate(item) for item in plan_data["microservices"]]
     plan_data["architecture_diagram_mermaid"] = normalize_mermaid(service_diagram(services))
@@ -83,6 +85,7 @@ def _package_from_plan(plan: ArchitecturePlan, generation_mode: str) -> Architec
     return ArchitecturePackage(
         **plan_data,
         generation_mode=generation_mode,
+        llm_error=llm_error,
         generated_files=GeneratedFiles(
             fastapi_code=fastapi_files(plan.project_name, plan.database_schema, plan.api_design),
             react_frontend=react_files(plan.project_name, plan.database_schema),

@@ -257,6 +257,13 @@ textarea {
   gap: 4px;
 }
 
+.llm-error {
+  margin: 4px 0 0;
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .workspace {
   min-width: 0;
   padding: 24px;
