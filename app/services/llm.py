@@ -74,7 +74,7 @@ def generate_llm_plan(requirements: str, user_stories: str) -> LlmResult:
     model = os.getenv("AI_ARCHITECT_MODEL", "gpt-5-nano")
     base_url = os.getenv("AI_ARCHITECT_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     timeout = float(os.getenv("AI_ARCHITECT_LLM_TIMEOUT_SECONDS", "45"))
-    max_output_tokens = int(os.getenv("AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS", "6000"))
+    max_output_tokens = int(os.getenv("AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS", "3500"))
     if model.startswith("gpt-5"):
         timeout = max(timeout, 90)
 
@@ -175,15 +175,11 @@ def _parse_json_content(content: str, response_json: dict[str, Any]) -> dict[str
 
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError:
         extracted = _extract_json_object(cleaned)
         if extracted:
             return json.loads(extracted)
-        finish_reason = response_json.get("choices", [{}])[0].get("finish_reason", "unknown")
-        raise ValueError(
-            "LLM returned text but no JSON object could be extracted"
-            f" (finish_reason={finish_reason}, prefix={_shorten(cleaned[:500])})."
-        ) from exc
+        raise
 
 
 def _clean_json_text(content: str) -> str:

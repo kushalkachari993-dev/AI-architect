@@ -151,13 +151,3 @@ def test_empty_llm_content_reports_finish_reason() -> None:
         assert "AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS" in str(exc)
     else:
         raise AssertionError("Expected empty content to raise ValueError")
-
-
-def test_non_json_llm_content_reports_prefix() -> None:
-    try:
-        _parse_json_content("I cannot provide that output.", {"choices": [{"finish_reason": "stop"}]})
-    except ValueError as exc:
-        assert "no JSON object could be extracted" in str(exc)
-        assert "I cannot provide" in str(exc)
-    else:
-        raise AssertionError("Expected non-JSON content to raise ValueError")
