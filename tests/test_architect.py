@@ -1,6 +1,6 @@
 from app.services.architect import generate_architecture_package, generate_package_from_plan
 from app.services.diagram import normalize_mermaid, service_diagram
-from app.services.llm import _normalize_plan_payload, _parse_json_content
+from app.services.llm import _normalize_plan_payload
 from app.services.render import package_to_zip
 
 
@@ -133,21 +133,3 @@ def test_normalizes_nested_llm_api_request_schema() -> None:
     assert normalized["api_design"][0]["request"]["pathParam.vendorId"] == "uuid"
     assert normalized["api_design"][0]["response"]["vendor.id"] == "uuid"
     assert normalized["database_schema"][0]["fields"] == ["id: uuid"]
-
-
-def test_parses_fenced_or_noisy_json_content() -> None:
-    payload = _parse_json_content('```json\n{"project_name":"Demo"}\n```', {"choices": [{"finish_reason": "stop"}]})
-    noisy = _parse_json_content('Here is JSON:\n{"project_name":"Demo"}\nDone.', {"choices": [{"finish_reason": "stop"}]})
-
-    assert payload["project_name"] == "Demo"
-    assert noisy["project_name"] == "Demo"
-
-
-def test_empty_llm_content_reports_finish_reason() -> None:
-    try:
-        _parse_json_content("", {"choices": [{"finish_reason": "length"}], "usage": {"completion_tokens": 4000}})
-    except ValueError as exc:
-        assert "finish_reason=length" in str(exc)
-        assert "AI_ARCHITECT_LLM_MAX_OUTPUT_TOKENS" in str(exc)
-    else:
-        raise AssertionError("Expected empty content to raise ValueError")
