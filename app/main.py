@@ -59,6 +59,7 @@ async def generate(
     payload = package.model_dump()
     payload["project_id"] = metadata["id"]
     payload["created_at"] = metadata["created_at"]
+    payload["project_persisted"] = metadata["persisted"]
     return payload
 
 
@@ -116,6 +117,7 @@ def approve(plan: ArchitecturePlan):
     payload = package.model_dump()
     payload["project_id"] = metadata["id"]
     payload["created_at"] = metadata["created_at"]
+    payload["project_persisted"] = metadata["persisted"]
     return payload
 
 

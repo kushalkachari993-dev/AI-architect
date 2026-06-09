@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from app.models import ArchitecturePackage
 
-PROJECT_DIR = Path("data/projects")
+LOCAL_PROJECT_DIR = Path("data/projects")
+SERVERLESS_PROJECT_DIR = Path("/tmp/ai-architect/projects")
 
 
-def save_project(package: ArchitecturePackage) -> dict[str, str]:
-    PROJECT_DIR.mkdir(parents=True, exist_ok=True)
+def save_project(package: ArchitecturePackage) -> dict[str, str | bool]:
     project_id = uuid4().hex
     created_at = datetime.now(UTC).isoformat()
     payload = {
@@ -19,16 +20,22 @@ def save_project(package: ArchitecturePackage) -> dict[str, str]:
         "created_at": created_at,
         "package": package.model_dump(),
     }
-    _project_path(project_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return {"id": project_id, "created_at": created_at}
+    try:
+        project_dir = _project_dir()
+        project_dir.mkdir(parents=True, exist_ok=True)
+        _project_path(project_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return {"id": project_id, "created_at": created_at, "persisted": True}
+    except OSError:
+        return {"id": project_id, "created_at": created_at, "persisted": False}
 
 
 def list_projects(limit: int = 20) -> list[dict[str, str]]:
-    if not PROJECT_DIR.exists():
+    project_dir = _project_dir()
+    if not project_dir.exists():
         return []
 
     projects = []
-    for path in PROJECT_DIR.glob("*.json"):
+    for path in project_dir.glob("*.json"):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             package = payload["package"]
@@ -60,4 +67,13 @@ def load_project(project_id: str) -> ArchitecturePackage | None:
 
 def _project_path(project_id: str) -> Path:
     clean_id = "".join(char for char in project_id if char.isalnum())
-    return PROJECT_DIR / f"{clean_id}.json"
+    return _project_dir() / f"{clean_id}.json"
+
+
+def _project_dir() -> Path:
+    configured = os.getenv("PROJECT_STORAGE_DIR")
+    if configured:
+        return Path(configured)
+    if os.getenv("VERCEL"):
+        return SERVERLESS_PROJECT_DIR
+    return LOCAL_PROJECT_DIR

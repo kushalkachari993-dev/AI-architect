@@ -47,6 +47,14 @@ AI_ARCHITECT_LLM_BASE_URL=https://api.openai.com/v1
 AI_ARCHITECT_LLM_TIMEOUT_SECONDS=90
 ```
 
+Optional storage setting:
+
+```dotenv
+PROJECT_STORAGE_DIR=/tmp/ai-architect/projects
+```
+
+On Vercel/serverless deployments, project history is stored in `/tmp`, which is writable but ephemeral. For durable multi-user history, connect a database or object store later.
+
 Then start the API:
 
 ```powershell

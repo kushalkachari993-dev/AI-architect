@@ -62,7 +62,7 @@ form.addEventListener("submit", async (event) => {
       throw new Error(await response.text());
     }
     lastPackage = await response.json();
-    lastProjectId = lastPackage.project_id;
+    lastProjectId = lastPackage.project_persisted ? lastPackage.project_id : null;
     renderPackage(lastPackage);
     setState("done", "Complete");
     downloadButton.disabled = false;
@@ -502,7 +502,7 @@ async function approveEditedArchitecture() {
     });
     if (!response.ok) throw new Error(await response.text());
     lastPackage = await response.json();
-    lastProjectId = lastPackage.project_id;
+    lastProjectId = lastPackage.project_persisted ? lastPackage.project_id : null;
     lastFormData = null;
     renderPackage(lastPackage);
     downloadButton.disabled = false;
