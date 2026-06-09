@@ -53,7 +53,15 @@ Optional storage setting:
 PROJECT_STORAGE_DIR=/tmp/ai-architect/projects
 ```
 
-On Vercel/serverless deployments, project history is stored in `/tmp`, which is writable but ephemeral. For durable multi-user history, connect a database or object store later.
+For durable project history with Prisma Postgres, set one of these environment variables to your Prisma Postgres connection URL:
+
+```dotenv
+PRISMA_DATABASE_URL=postgresql://...
+```
+
+The app also recognizes `DATABASE_URL`, `POSTGRES_URL`, and `POSTGRES_PRISMA_URL`.
+
+If no Postgres URL is configured, local development uses `data/projects`. On Vercel/serverless deployments, the fallback is `/tmp`, which is writable but ephemeral.
 
 Then start the API:
 
